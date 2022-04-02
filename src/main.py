@@ -8,8 +8,8 @@ from PyQt5.QtGui import QBrush, QColor
 from PyQt5.Qt import QUrl, QDesktopServices
 from PyQt5 import QtCore
 from qtdesigner_files.ui_interface import Ui_MainWindow
-from folder_scanner import FolderScanner
-from virus_total_api import VTAPI
+import folder_scanner
+import virus_total_api
 
 
 class VirusTotalWorker(QObject):
@@ -24,7 +24,7 @@ class VirusTotalWorker(QObject):
     @pyqtSlot()
     def submit_scan(self):
         print('Submitting scan to VirusTotal API')
-        vt_api = VTAPI(self.__api_key, self.__absolute_file_path)
+        vt_api = virus_total_api.VTAPI(self.__api_key, self.__absolute_file_path)
         api_response = vt_api.get_result_from_hash()
         if api_response:
             self.virustotal_sig_done.emit(api_response)
@@ -48,7 +48,7 @@ class FolderMonitor(QObject):
     @pyqtSlot()
     def run_folder_scan(self):
         while True:
-            self.folder_scanner = FolderScanner(self.__download_folder_path)
+            self.folder_scanner = folder_scanner.FolderScanner(self.__download_folder_path)
             self.folder_scanner.stop_scanning(False)
             self.folder_scanner.add_file_ext_to_ignore_list(self.exclude_file_extensions)
             print('Folder scan Running')
@@ -80,7 +80,7 @@ class Window(QMainWindow):
 
         self.ui.StopAutoScanBtn.hide()
 
-        self.config_error_popup = QMessageBox()
+        self.error_popup = QMessageBox()
 
         self.ui.ScanHistoryTreeWidget.itemClicked.connect(self.open_link)
         self.setAcceptDrops(True)
@@ -229,7 +229,7 @@ class Window(QMainWindow):
                 self.ui.SaveChangesBtn.setText('Saved')
                 self.ui.SaveChangesBtn.setStyleSheet('color: green')
         except Exception as e:
-            self.config_error_message(str(e))
+            self.error_message(str(e))
 
     def valid_setting_parameters(self):
         try:
@@ -245,15 +245,15 @@ class Window(QMainWindow):
                 raise ValueError('Choose Folder which needs to be scanned')
             return True
         except Exception as e:
-            self.config_error_message(str(e))
+            self.error_message(str(e))
             return False
 
-    def config_error_message(self, e: str):
+    def error_message(self, e: str):
         """Display error message when trying to save invalid data"""
-        self.config_error_popup.setWindowTitle('Error')
-        self.config_error_popup.setIcon(QMessageBox.Critical)
-        self.config_error_popup.setText(str(e))
-        self.config_error_popup.exec_()
+        self.error_popup.setWindowTitle('Error')
+        self.error_popup.setIcon(QMessageBox.Critical)
+        self.error_popup.setText(str(e))
+        self.error_popup.exec_()
 
     @staticmethod
     def check_exclude_file_ext_format(file_extensions: str) -> bool:
@@ -279,7 +279,7 @@ class Window(QMainWindow):
             self.ui.FolderPathLabel.setText(config['scan_folder_location'])
         except Exception as e:
             print(f"Couldn't Load settings from a file: {e}")
-            self.config_error_message(str(e))
+            self.error_message(str(e))
 
     def open_dialog_box(self):
         path = QFileDialog.getExistingDirectory()
@@ -297,12 +297,22 @@ class Window(QMainWindow):
 
     def drop_event_scan(self, abs_file_path: str):
         valid_parameters = self.valid_setting_parameters()
-        if valid_parameters:
-            item = {'file_name': Path(abs_file_path).name,
-                    'status': 'Scanning',
-                    'absolute_file_path': abs_file_path}
-            self.add_item_to_widget(item)
+        if self.valid_drop_event_filesize(abs_file_path):
+            if valid_parameters:
+                item = {'file_name': Path(abs_file_path).name,
+                        'status': 'Scanning',
+                        'absolute_file_path': abs_file_path}
+                self.add_item_to_widget(item)
+        else:
+            self.error_message('File size exceeds max File size 32MB')
 
+    def valid_drop_event_filesize(self, abs_file_path):
+        file_size = os.stat(abs_file_path).st_size
+        valid_file_size = int(f"{file_size / float(1 << 20):,.0f}") <= 32
+        if valid_file_size:
+            return True
+        else:
+            return False
 
 if __name__ == '__main__':
     if not os.path.exists('../config.yaml'):
