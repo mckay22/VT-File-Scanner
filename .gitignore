@@ -6,3 +6,8 @@ pg.epub
  src/qtdesigner_files/__pycache__/*
  *.pyc
  .idea/
+ .debug.log
+ src/dist/*
+ src/build/*
+ src/vt-file-scanner.spec
+ src/main.spec
