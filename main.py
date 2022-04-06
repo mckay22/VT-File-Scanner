@@ -1,15 +1,15 @@
 import os.path
 from pathlib import Path
+import configparser
 import sys
-import yaml
 from PyQt5.QtWidgets import QMainWindow, QApplication, QFileDialog, QTreeWidgetItem, QMessageBox
 from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QBrush, QColor
 from PyQt5.Qt import QUrl, QDesktopServices
 from PyQt5 import QtCore
-from qtdesigner_files.ui_interface import Ui_MainWindow
-import folder_scanner
-import virus_total_api
+from src.qtdesigner_files.ui_interface import Ui_MainWindow
+from src import folder_scanner
+from src import virus_total_api
 
 
 class VirusTotalWorker(QObject):
@@ -72,7 +72,7 @@ class Window(QMainWindow):
         self.all_files_inside_scan_history_widget = {}
         self.__virustotal_scan_threads = []
         self.__threads = []
-
+        self.config = configparser.ConfigParser()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
@@ -213,17 +213,17 @@ class Window(QMainWindow):
             print(self.ui.SaveChangesBtn.text())
 
     def save_settings(self):
-        """Save settings into yaml config"""
         vt_api_key = self.ui.VTApiKeyInput.text()
         exclude_file_extensions = self.ui.ExclExtensionInput.text()
         scan_folder_location = self.ui.FolderPathLabel.text()
         try:
             if self.valid_setting_parameters():
-                config = {'api_key': vt_api_key,
-                          'scan_folder_location': scan_folder_location,
-                          'exclude_file_extensions': exclude_file_extensions}
-                with open('../config.yaml', 'w') as f:
-                    yaml.safe_dump(config, f)
+                self.config.read('config.ini')
+                self.config['settings'] = {'api_key': vt_api_key,
+                                           'scan_folder_location': scan_folder_location,
+                                           'exclude_file_extensions': exclude_file_extensions}
+                with open('config.ini', 'w') as f:
+                    self.config.write(f)
                 self.ui.SaveChangesBtn.setText('Saved')
                 self.ui.SaveChangesBtn.setStyleSheet('color: green')
         except Exception as e:
@@ -270,11 +270,10 @@ class Window(QMainWindow):
 
     def load_settings(self):
         try:
-            with open('../config.yaml', 'r') as f:
-                config = yaml.safe_load(f.read())
-            self.ui.VTApiKeyInput.setText(config['api_key'])
-            self.ui.ExclExtensionInput.setText(config['exclude_file_extensions'])
-            self.ui.FolderPathLabel.setText(config['scan_folder_location'])
+            self.config.read('config.ini')
+            self.ui.VTApiKeyInput.setText(self.config['settings']['api_key'])
+            self.ui.ExclExtensionInput.setText(self.config['settings']['exclude_file_extensions'])
+            self.ui.FolderPathLabel.setText(self.config['settings']['scan_folder_location'])
         except Exception as e:
             print(f"Couldn't Load settings from a file: {e}")
             self.error_message(str(e))
@@ -312,13 +311,15 @@ class Window(QMainWindow):
         else:
             return False
 
+
 if __name__ == '__main__':
-    if not os.path.exists('../config.yaml'):
-        with open('../config.yaml', 'w') as f:
-            conf = {'api_key': '',
-                      'exclude_file_extensions': '.tmp .crdownload',
-                      'scan_folder_location': r'C:\Users'}
-            yaml.safe_dump(conf, f)
+    if not os.path.exists('config.ini'):
+        with open('config.ini', 'w') as configfile:
+            conf = configparser.ConfigParser()
+            conf['settings'] = {'api_key': '',
+                                'exclude_file_extensions': '.tmp .crdownload',
+                                'scan_folder_location': r'C:\Users'}
+            conf.write(configfile)
     app = QApplication(sys.argv)
     ui = Window()
     ui.show()
