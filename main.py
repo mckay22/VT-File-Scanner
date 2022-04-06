@@ -13,8 +13,8 @@ import virus_total_api
 
 
 class VirusTotalWorker(QObject):
+    """"""
     virustotal_sig_done = pyqtSignal(dict)
-    # virustotal_sig_failed = pyqtSignal(bool)
 
     def __init__(self, api_key: str, absolute_file_path: str):
         self.__api_key = api_key
@@ -28,8 +28,6 @@ class VirusTotalWorker(QObject):
         api_response = vt_api.get_result_from_hash()
         if api_response:
             self.virustotal_sig_done.emit(api_response)
-        # else:
-        #     self.virustotal_sig_failed.emit(False)
 
 
 class FolderMonitor(QObject):
