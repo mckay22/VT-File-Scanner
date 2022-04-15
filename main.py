@@ -1,10 +1,11 @@
+import logging
 import os.path
 from pathlib import Path
 import configparser
 import sys
 from PyQt5.QtWidgets import QMainWindow, QApplication, QFileDialog, QTreeWidgetItem, QMessageBox
 from PyQt5.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
-from PyQt5.QtGui import QBrush, QColor
+from PyQt5.QtGui import QBrush, QColor, QCloseEvent
 from PyQt5.Qt import QUrl, QDesktopServices
 from PyQt5 import QtCore
 from src.qtdesigner_files.ui_interface import Ui_MainWindow
@@ -40,7 +41,7 @@ class FolderMonitor(QObject):
         super().__init__()
         self.__download_folder_path = download_folder_path
         self.__api_key = api_key
-        self.exclude_file_extensions = exclude_file_extensions
+        self.__exclude_file_extensions = exclude_file_extensions
         self.folder_scanner = None
 
     @pyqtSlot()
@@ -48,7 +49,7 @@ class FolderMonitor(QObject):
         while True:
             self.folder_scanner = folder_scanner.FolderScanner(self.__download_folder_path)
             self.folder_scanner.stop_scanning(False)
-            self.folder_scanner.add_file_ext_to_ignore_list(self.exclude_file_extensions)
+            self.folder_scanner.add_file_ext_to_ignore_list(self.__exclude_file_extensions)
             print('Folder scan Running')
             new_file_path = self.folder_scanner.check_directory_changes()
             if new_file_path:
@@ -75,7 +76,7 @@ class Window(QMainWindow):
         self.config = configparser.ConfigParser()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
-
+        self.abs_config_path = f"{Path(__file__).resolve().parent}/config.ini"
         self.ui.StopAutoScanBtn.hide()
 
         self.error_popup = QMessageBox()
@@ -196,7 +197,7 @@ class Window(QMainWindow):
         self.enable_inputs()
 
     def init_settings(self):
-        """Loading settings from config.yaml"""
+        """Loading settings from config.ini"""
         self.load_settings()
         if len(self.ui.ExclExtensionInput.text()) == 0:
             self.ui.ExclExtensionInput.setPlaceholderText('file extensions separated by space: .pdf .doc')
@@ -209,8 +210,6 @@ class Window(QMainWindow):
         if self.ui.SaveChangesBtn.text() == 'Saved':
             self.ui.SaveChangesBtn.setText('Save Changes')
             self.ui.SaveChangesBtn.setStyleSheet('color: Black')
-        else:
-            print(self.ui.SaveChangesBtn.text())
 
     def save_settings(self):
         vt_api_key = self.ui.VTApiKeyInput.text()
@@ -218,11 +217,11 @@ class Window(QMainWindow):
         scan_folder_location = self.ui.FolderPathLabel.text()
         try:
             if self.valid_setting_parameters():
-                self.config.read('config.ini')
+                self.config.read(self.abs_config_path)
                 self.config['settings'] = {'api_key': vt_api_key,
                                            'scan_folder_location': scan_folder_location,
                                            'exclude_file_extensions': exclude_file_extensions}
-                with open('config.ini', 'w') as f:
+                with open(self.abs_config_path, 'w') as f:
                     self.config.write(f)
                 self.ui.SaveChangesBtn.setText('Saved')
                 self.ui.SaveChangesBtn.setStyleSheet('color: green')
@@ -270,7 +269,7 @@ class Window(QMainWindow):
 
     def load_settings(self):
         try:
-            self.config.read('config.ini')
+            self.config.read(self.abs_config_path)
             self.ui.VTApiKeyInput.setText(self.config['settings']['api_key'])
             self.ui.ExclExtensionInput.setText(self.config['settings']['exclude_file_extensions'])
             self.ui.FolderPathLabel.setText(self.config['settings']['scan_folder_location'])
@@ -312,12 +311,20 @@ class Window(QMainWindow):
             return False
 
 
+    def closeEvent(self, a0: QCloseEvent) -> None:
+        """Wait for autoscan thread to quit"""
+        if not self.ui.StartAutoScanBtn.isEnabled():
+            self.stop_folder_scan()
+
+
 if __name__ == '__main__':
-    if not os.path.exists('config.ini'):
-        with open('config.ini', 'w') as configfile:
+    root_dir_path = Path(__file__).resolve().parent
+    abs_config_path = f"{root_dir_path}/config.ini"
+    if not os.path.exists(abs_config_path):
+        with open(abs_config_path, 'w') as configfile:
             conf = configparser.ConfigParser()
             conf['settings'] = {'api_key': '',
-                                'exclude_file_extensions': '.tmp .crdownload',
+                                'exclude_file_extensions': '',
                                 'scan_folder_location': r'C:\Users'}
             conf.write(configfile)
     app = QApplication(sys.argv)
