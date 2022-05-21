@@ -11,6 +11,8 @@ class VTAPI:
     api_file_scan_url = 'https://www.virustotal.com/vtapi/v2/file/scan'
 
     def __init__(self, api_key: str, abs_file_path: str) -> None:
+        """:arg api_key: Virustotal API KEY
+           :arg abs_file_path: absolute file path"""
         self.api_key = api_key
         self.abs_file_path = abs_file_path
         self.file_name = self.get_filename()
@@ -21,8 +23,7 @@ class VTAPI:
         return file_name
 
     def get_result_from_hash(self) -> Dict or None:
-        """First We try to receive the latest possible scan, If there's none we have to wait considerable amount of time
-        till virustotal scan the file"""
+        """Get api response from hash, if File is unique upload file"""
         file_uploaded = False
         print(f"getting result from sha256")
         for _ in range(10):

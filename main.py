@@ -14,7 +14,6 @@ from src import virus_total_api
 
 
 class VirusTotalWorker(QObject):
-    """"""
     virustotal_sig_done = pyqtSignal(dict)
 
     def __init__(self, api_key: str, absolute_file_path: str):
@@ -72,7 +71,7 @@ class Window(QMainWindow):
         super().__init__()
         self.all_files_inside_scan_history_widget = {}
         self.__virustotal_scan_threads = []
-        self.__threads = []
+        self.__folder_scan_threads = []
         self.config = configparser.ConfigParser()
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -87,7 +86,7 @@ class Window(QMainWindow):
         self.ui.VTApiKeyInput.setEchoMode(self.ui.VTApiKeyInput.Password)
         self.ui.FolderLocationBtn.clicked.connect(self.change_folder_directory_handler)
         self.ui.SaveChangesBtn.clicked.connect(self.save_settings)
-        self.ui.StartAutoScanBtn.clicked.connect(self.start_autoscan_thread)
+        self.ui.StartAutoScanBtn.clicked.connect(self.start_folder_scan)
         self.ui.StopAutoScanBtn.clicked.connect(self.stop_folder_scan)
         self.ui.ScanHistoryTreeWidget.setColumnWidth(1, 70)
         self.ui.ExclExtensionInput.textEdited.connect(self.reset_save_settings_btn)
@@ -175,35 +174,35 @@ class Window(QMainWindow):
             url = QUrl(permalink)
             QDesktopServices.openUrl(url)
 
-    def start_autoscan_thread(self):
+    def start_folder_scan(self):
         if self.valid_setting_parameters():
-            self.__threads = []
+            self.__folder_scan_threads = []
             folder_monitor_worker = FolderMonitor(self.ui.VTApiKeyInput.text(),
                                                   self.ui.FolderPathLabel.text(),
                                                   self.ui.ExclExtensionInput.text())
             thread = QThread()
             folder_monitor_worker.moveToThread(thread)
-            self.__threads.append((thread, folder_monitor_worker))
+            self.__folder_scan_threads.append((thread, folder_monitor_worker))
             folder_monitor_worker.new_file_signal.connect(self.add_item_to_widget)
             thread.started.connect(folder_monitor_worker.run_folder_scan)
             thread.start()
             self.disable_inputs()
 
     def stop_folder_scan(self):
-        for thread, worker in self.__threads:
+        for thread, worker in self.__folder_scan_threads:
             worker.stop_folder_scan()
             thread.quit()
             thread.wait()
         self.enable_inputs()
 
     def init_settings(self):
-        """Loading settings from config.ini"""
+        """Load settings from config.ini"""
         self.load_settings()
         if len(self.ui.ExclExtensionInput.text()) == 0:
             self.ui.ExclExtensionInput.setPlaceholderText('file extensions separated by space: .pdf .doc')
 
     def change_folder_directory_handler(self):
-        """Opening Dialog Window"""
+        """Open Dialog Window"""
         self.open_dialog_box()
 
     def reset_save_settings_btn(self):
@@ -302,14 +301,14 @@ class Window(QMainWindow):
         else:
             self.error_message('File size exceeds max File size 32MB')
 
-    def valid_drop_event_filesize(self, abs_file_path):
+    @staticmethod
+    def valid_drop_event_filesize(abs_file_path):
         file_size = os.stat(abs_file_path).st_size
         valid_file_size = int(f"{file_size / float(1 << 20):,.0f}") <= 32
         if valid_file_size:
             return True
         else:
             return False
-
 
     def closeEvent(self, a0: QCloseEvent) -> None:
         """Wait for autoscan thread to quit"""
